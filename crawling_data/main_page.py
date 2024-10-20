@@ -6,6 +6,7 @@ import altair as alt
 import numpy as np
 import joblib
 from wordcloud import WordCloud
+from collections import Counter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import train_test_split
@@ -15,6 +16,12 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 from nltk.corpus import stopwords as stopwords_scratch
 import pickle
+
+st.set_page_config(page_title="Twitter Sentiment Analysis", page_icon="🐦", layout="wide")
+
+# Load custom CSS
+with open("crawling_data\style.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 # Load model dan features
 feature_bow = pickle.load(open("crawling_data/model/feature-bow.p",'rb'))
@@ -73,7 +80,7 @@ def predict_sentiment(sent):
     
     return sentiment
 
-# Generate word cloud
+# Membuat word cloud
 def generate_wordcloud(data):
     text = ' '.join(data['processed_text'].astype(str).tolist())
     wc = WordCloud(background_color='black', max_words=500, width=800, height=400).generate(text)
@@ -81,6 +88,28 @@ def generate_wordcloud(data):
     plt.imshow(wc, interpolation='bilinear')
     plt.axis('off')
     st.pyplot(plt)
+
+# Fungsi untuk memproses kata yang paling sering muncul
+def generate_top_words(data, num_words):
+    text = ' '.join(data['processed_text'].astype(str).tolist())
+    words = text.split()
+    word_counts = Counter(words)
+    top_words = word_counts.most_common(num_words)
+    
+    # Convert menjadi DataFrame
+    df_top_words = pd.DataFrame(top_words, columns=['word', 'count'])
+
+    # Membuat bar chart menggunakan Altair
+    chart = alt.Chart(df_top_words).mark_bar().encode(
+        x=alt.X('word', sort='-y'),  # Sort descending
+        y='count',
+        color='word'
+    ).properties(
+        width=1000,
+        height=400
+    )
+    
+    st.altair_chart(chart)
 
 # K-Means clustering
 def kmeans_clustering(data):
@@ -131,12 +160,15 @@ def analyze_input_sentiment(text):
 
 # Main application
 def main():
-    st.title('Twitter Sentiment Analysis')
+    st.title('🐦 Twitter Sentiment Analysis')
+    st.markdown("---")
 
     menu = ["Sentiment Analysis", "Dataset dan WordCloud", "K-Means", "Input Sentiment Analysis"]
-    choice = st.sidebar.selectbox("Menu", menu)
+    st.sidebar.title("Menu")
+    choice = st.sidebar.selectbox("", menu)
 
-    uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
+    uploaded_file = st.file_uploader("Upload your CSV file from Twitter Data Crawling", type=["csv"])
+    st.markdown("---")
     data = None
     if uploaded_file:
         data = pd.read_csv(uploaded_file)
@@ -146,6 +178,8 @@ def main():
             st.error("Uploaded CSV must contain 'full_text'.")
             return
 
+
+    # Sentiment Analysis
     if choice == "Sentiment Analysis" and data is not None:
         st.subheader("Sentiment Analysis")
         st.write("Data Preview:")
@@ -153,25 +187,34 @@ def main():
         data['sentiment'] = data['processed_text'].apply(lambda x: predict_sentiment(x))
         st.write("### Sentiment Analysis Results")
         st.dataframe(data[['full_text', 'sentiment']])
+        st.write("### Sentiment Analysis Count")
         sentiment_counts = data['sentiment'].value_counts()
         st.bar_chart(sentiment_counts)
 
+    # Dataset dan WordCloud
     elif choice == "Dataset dan WordCloud" and data is not None:
-        st.subheader("Dataset dan WordCloud")
+        st.subheader("Dataset dan WordCloud ☁️")
         st.dataframe(data)
         st.write("### Word Cloud")
         generate_wordcloud(data)
+        st.write("### Kata yang Sering Muncul")
+        num_words = st.slider("Berapa banyak kata yang sering muncul?", min_value=1, max_value=15, value=10)
+        st.write(f"Menampilkan {num_words} kata yang paling sering muncul:")
+        generate_top_words(data, num_words)
 
+
+    # K-Means Clustering
     elif choice == "K-Means" and data is not None:
-        st.subheader("K-Means Clustering")
+        st.subheader("K-Means Clustering 🔄")
         data, kmeans_model = kmeans_clustering(data)
         st.dataframe(data[['full_text', 'cluster']])
         st.write("### Cluster Visualization")
         visualize_clusters(data)
         display_cluster_examples(data)
 
+    # Input Sentiment Analysis
     elif choice == "Input Sentiment Analysis":
-        st.subheader("Analyze Sentiment of Your Own Text")
+        st.subheader("Analyze Your Own Text 📄")
         user_input = st.text_area("Enter text to analyze sentiment:")
         if st.button("Analyze"):
             analyze_input_sentiment(user_input)
